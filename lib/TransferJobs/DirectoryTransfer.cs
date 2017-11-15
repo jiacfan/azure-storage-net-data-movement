@@ -343,7 +343,8 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement
         protected override SingleObjectTransfer CreateTransfer(TransferEntry entry)
         {
             TransferLocation sourceLocation = GetSourceTransferLocation(this.Source, entry);
-            TransferLocation destLocation = GetDestinationTransferLocation(this.Destination, entry);
+            sourceLocation.IsInstanceInfoFetched = true;
+            TransferLocation destLocation = this.GetDestinationTransferLocation(this.Destination, entry);
             SingleObjectTransfer transfer = new SingleObjectTransfer(sourceLocation, destLocation, this.TransferMethod);
             transfer.Context = this.Context;
             return transfer;

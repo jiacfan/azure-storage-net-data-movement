@@ -16,37 +16,41 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
 
     internal sealed class PageBlobReader : RangeBasedReader
     {
-        private AzureBlobLocation sourceLocation;
-        private CloudPageBlob pageBlob;
+        private readonly AzureBlobLocation sourceLocation;
+        private readonly CloudPageBlob pageBlob;
 
         public PageBlobReader(
             TransferScheduler scheduler,
             SyncTransferController controller,
             CancellationToken cancellationToken)
-            :base(scheduler, controller, cancellationToken)
+            : base(scheduler, controller, cancellationToken)
         {
             this.sourceLocation = this.SharedTransferData.TransferJob.Source as AzureBlobLocation;
-            this.pageBlob = this.sourceLocation.Blob as CloudPageBlob;
+            this.pageBlob = this.sourceLocation?.Blob as CloudPageBlob;
             Debug.Assert(null != this.pageBlob, "Initializing a PageBlobReader, the source location should be a CloudPageBlob instance.");
         }
 
         protected override async Task DoFetchAttributesAsync()
         {
-            AccessCondition accessCondition = Utils.GenerateIfMatchConditionWithCustomerCondition(
-                this.sourceLocation.ETag,
-                this.sourceLocation.AccessCondition,
-                this.sourceLocation.CheckedAccessCondition);
+            if (this.sourceLocation.IsInstanceInfoFetched == null
+                || !this.sourceLocation.IsInstanceInfoFetched.Value)
+            { 
+                AccessCondition accessCondition = Utils.GenerateIfMatchConditionWithCustomerCondition(
+                    this.sourceLocation.ETag,
+                    this.sourceLocation.AccessCondition,
+                    this.sourceLocation.CheckedAccessCondition);
 
-            await this.pageBlob.FetchAttributesAsync(
-                accessCondition,
-                Utils.GenerateBlobRequestOptions(this.sourceLocation.BlobRequestOptions),
-                Utils.GenerateOperationContext(this.Controller.TransferContext),
-                this.CancellationToken);
+                await this.pageBlob.FetchAttributesAsync(
+                    accessCondition,
+                    Utils.GenerateBlobRequestOptions(this.sourceLocation.BlobRequestOptions),
+                    Utils.GenerateOperationContext(this.Controller.TransferContext),
+                    this.CancellationToken);
+            }
 
             if (string.IsNullOrEmpty(this.sourceLocation.ETag))
             {
                 if ((0 != this.SharedTransferData.TransferJob.CheckPoint.EntryTransferOffset)
-                    || (this.SharedTransferData.TransferJob.CheckPoint.TransferWindow.Any()))
+                    || this.SharedTransferData.TransferJob.CheckPoint.TransferWindow.Any())
                 {
                     throw new InvalidOperationException(Resources.RestartableInfoCorruptedException);
                 }

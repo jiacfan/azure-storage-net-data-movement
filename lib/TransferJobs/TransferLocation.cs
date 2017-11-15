@@ -22,7 +22,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement
         }
 
         /// <summary>
-        /// Get source/destination instance in transfer.
+        /// Gets source/destination instance in transfer.
         /// </summary>
         public abstract object Instance
         {
@@ -30,10 +30,20 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement
         }
 
         /// <summary>
+        /// Gets or sets a value indicating whether detailed information of the instance 
+        /// contained in the current transfer location has been fetched.
+        /// </summary>
+        public bool? IsInstanceInfoFetched
+        {
+            get;
+            set;
+        }
+
+        /// <summary>
         /// Validates the transfer location.
         /// </summary>
         public abstract void Validate();
-
+        
         // Summary:
         //     Determines whether the specified transfer location is equal to the current transfer location.
         //
