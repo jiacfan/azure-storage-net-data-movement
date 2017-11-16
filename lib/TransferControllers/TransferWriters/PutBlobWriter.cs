@@ -237,12 +237,57 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                     Utils.SetAttributes(this.blockBlob, this.SharedTransferData.Attributes);
                     await this.Controller.SetCustomAttributesAsync(this.blockBlob);
 
+                    string tempContentEncoding = null, tempContentLanguage = null;
+
+                    string tempContentMD5 = this.blockBlob.Properties.ContentMD5;
+
+                    if (this.blockBlob.Properties.ContentEncoding != null && this.blockBlob.Properties.ContentEncoding.Contains(","))
+                    {
+                        tempContentEncoding = this.blockBlob.Properties.ContentEncoding;
+                        this.blockBlob.Properties.ContentEncoding = string.Empty;
+                    }
+
+                    if (this.blockBlob.Properties.ContentLanguage != null && this.blockBlob.Properties.ContentLanguage.Contains(","))
+                    {
+                        tempContentLanguage = this.blockBlob.Properties.ContentLanguage;
+                        this.blockBlob.Properties.ContentLanguage = string.Empty;
+                    }
+
+                    var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
+                    var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
+                    var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
+
                     await this.blockBlob.UploadFromStreamAsync(
                         transferData.Stream,
-                        Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition, true),
-                        Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions),
-                        Utils.GenerateOperationContext(this.Controller.TransferContext),
+                        accessCondition,
+                        blobRequestOptions,
+                        operationContext,
                         this.CancellationToken);
+
+                    // REST API PutBlob would set Content-Type to application/octet-stream by default, if provided ContentType is null or empty.
+                    // To set Content-Type correctly, REST API SetBlobProperties must be called explicitly:
+                    // 1. The attributes are inherited from others and Content-Type is null or empty.
+                    // 2. User specifies Content-Type to string.Empty while uploading.
+                    if (tempContentMD5 != null || tempContentEncoding != null || tempContentLanguage != null || (this.SharedTransferData.Attributes.OverWriteAll && string.IsNullOrEmpty(this.blockBlob.Properties.ContentType))
+                        || (!this.SharedTransferData.Attributes.OverWriteAll && this.blockBlob.Properties.ContentType == string.Empty))
+                    {
+                        if (tempContentLanguage != null)
+                        {
+                            this.blockBlob.Properties.ContentLanguage = tempContentLanguage;
+                        }
+                        if (tempContentEncoding != null)
+                        {
+                            this.blockBlob.Properties.ContentEncoding = tempContentEncoding;
+                        }
+                        this.blockBlob.Properties.ContentMD5 = tempContentMD5;
+
+
+                        await this.blockBlob.SetPropertiesAsync(
+                            accessCondition,
+                            blobRequestOptions,
+                            operationContext,
+                            this.CancellationToken);
+                    }
                 }
 
                 this.Controller.UpdateProgress(() =>
