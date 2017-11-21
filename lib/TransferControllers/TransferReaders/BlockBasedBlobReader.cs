@@ -105,8 +105,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             this.hasWork = false;
             this.NotifyStarting();
 
-            if (this.sourceLocation.IsInstanceInfoFetched == null
-                || !this.sourceLocation.IsInstanceInfoFetched.Value)
+            if (this.sourceLocation.IsInstanceInfoFetched != true)
             {
                 AccessCondition accessCondition = Utils.GenerateIfMatchConditionWithCustomerCondition(
                     this.sourceLocation.ETag,
@@ -115,7 +114,6 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
 
                 try
                 {
-
                     await this.sourceBlob.FetchAttributesAsync(
                         accessCondition,
                         Utils.GenerateBlobRequestOptions(this.sourceLocation.BlobRequestOptions),

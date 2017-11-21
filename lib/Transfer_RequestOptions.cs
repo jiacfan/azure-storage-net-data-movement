@@ -43,6 +43,9 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement
         public static readonly TimeSpan DefaultCreationServerTimeout =
             TimeSpan.FromSeconds(30);
 
+        public static readonly TimeSpan DefaultCleanupServerTimeout =
+            TimeSpan.FromSeconds(5);
+
         /// <summary>
         /// Stores the default back-off.
         /// Increases exponentially used with ExponentialRetry: 3, 9, 21, 45, 93, 120, 120, 120, ...

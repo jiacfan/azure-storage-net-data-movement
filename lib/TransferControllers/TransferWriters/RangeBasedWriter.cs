@@ -113,6 +113,20 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             {
                 if (null != this.toUploadChunksCountdownEvent)
                 {
+                    if (this.state == State.Upload
+                        && this.toUploadChunksCountdownEvent?.InitialCount != 0
+                        && this.toUploadChunksCountdownEvent?.CurrentCount == this.toUploadChunksCountdownEvent?.InitialCount)
+                    {
+                        try
+                        {
+                            this.DoCleanup();
+                        }
+                        catch (Exception)
+                        {
+                            // Catch exception by design.
+                        }
+                    }
+
                     this.toUploadChunksCountdownEvent.Dispose();
                     this.toUploadChunksCountdownEvent = null;
                 }
@@ -410,5 +424,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
         protected abstract Task WriteRangeAsync(TransferData transferData);
         
         protected abstract Task DoCommitAsync();
+
+        protected abstract void DoCleanup();
     }
 }

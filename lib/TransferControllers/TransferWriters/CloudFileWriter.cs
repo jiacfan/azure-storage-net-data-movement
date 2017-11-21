@@ -12,6 +12,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.WindowsAzure.Storage.File;
+    using Microsoft.WindowsAzure.Storage.RetryPolicies;
 
     internal sealed class CloudFileWriter : RangeBasedWriter
     {
@@ -128,6 +129,24 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                     fileRequestOptions,
                     operationContext,
                     this.CancellationToken);
+            }
+        }
+
+        protected override void DoCleanup()
+        {
+            if (this.cloudFile != null)
+            {
+                var requestOption = new FileRequestOptions
+                {
+                    RetryPolicy = new NoRetry(),
+                    ServerTimeout = Transfer_RequestOptions.DefaultCleanupServerTimeout
+                };
+
+                this.cloudFile.DeleteIfExistsAsync(
+                    null,
+                    requestOption,
+                    Utils.GenerateOperationContext(this.Controller?.TransferContext),
+                    this.CancellationToken).GetAwaiter().GetResult();
             }
         }
     }

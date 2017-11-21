@@ -84,11 +84,6 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             }
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-        }
-
         private async Task FetchAttributesAsync()
         {
             Debug.Assert(
@@ -235,59 +230,10 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                     }
                     
                     Utils.SetAttributes(this.blockBlob, this.SharedTransferData.Attributes);
+
                     await this.Controller.SetCustomAttributesAsync(this.blockBlob);
 
-                    string tempContentEncoding = null, tempContentLanguage = null;
-
-                    string tempContentMD5 = this.blockBlob.Properties.ContentMD5;
-
-                    if (this.blockBlob.Properties.ContentEncoding != null && this.blockBlob.Properties.ContentEncoding.Contains(","))
-                    {
-                        tempContentEncoding = this.blockBlob.Properties.ContentEncoding;
-                        this.blockBlob.Properties.ContentEncoding = string.Empty;
-                    }
-
-                    if (this.blockBlob.Properties.ContentLanguage != null && this.blockBlob.Properties.ContentLanguage.Contains(","))
-                    {
-                        tempContentLanguage = this.blockBlob.Properties.ContentLanguage;
-                        this.blockBlob.Properties.ContentLanguage = string.Empty;
-                    }
-
-                    var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
-                    var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
-                    var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
-
-                    await this.blockBlob.UploadFromStreamAsync(
-                        transferData.Stream,
-                        accessCondition,
-                        blobRequestOptions,
-                        operationContext,
-                        this.CancellationToken);
-
-                    // REST API PutBlob would set Content-Type to application/octet-stream by default, if provided ContentType is null or empty.
-                    // To set Content-Type correctly, REST API SetBlobProperties must be called explicitly:
-                    // 1. The attributes are inherited from others and Content-Type is null or empty.
-                    // 2. User specifies Content-Type to string.Empty while uploading.
-                    if (tempContentMD5 != null || tempContentEncoding != null || tempContentLanguage != null || (this.SharedTransferData.Attributes.OverWriteAll && string.IsNullOrEmpty(this.blockBlob.Properties.ContentType))
-                        || (!this.SharedTransferData.Attributes.OverWriteAll && this.blockBlob.Properties.ContentType == string.Empty))
-                    {
-                        if (tempContentLanguage != null)
-                        {
-                            this.blockBlob.Properties.ContentLanguage = tempContentLanguage;
-                        }
-                        if (tempContentEncoding != null)
-                        {
-                            this.blockBlob.Properties.ContentEncoding = tempContentEncoding;
-                        }
-                        this.blockBlob.Properties.ContentMD5 = tempContentMD5;
-
-
-                        await this.blockBlob.SetPropertiesAsync(
-                            accessCondition,
-                            blobRequestOptions,
-                            operationContext,
-                            this.CancellationToken);
-                    }
+                    await this.DoUploadAndSetBlobProperties(transferData.Stream);
                 }
 
                 this.Controller.UpdateProgress(() =>
@@ -303,6 +249,67 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                 });
 
                 this.SetFinish();
+            }
+        }
+
+        /// <summary>
+        /// Upload using put blob and set customized blob properties.
+        /// Note this method: 
+        /// 1. Use x-ms-blob-content-encoding and x-ms-blob-content-language to work around request canonicalization.
+        /// 2. As REST API PutBlob would generate ContentMD5 and overwrite customized ContentMD5, 
+        ///    save provided content MD5 and use SetProperties to set customized ContentMD5 when necessary to ensure DMLib's behavior consistency.
+        /// 3. REST API PutBlob would set Content-Type to application/octet-stream by default, if provided ContentType is null or empty.
+        ///    To set Content-Type correctly, REST API SetBlobProperties must be called explicitly.
+        /// </summary>
+        /// <param name="sourceStream">Source stream.</param>
+        /// <returns><see cref="Task"/></returns>
+        private async Task DoUploadAndSetBlobProperties(Stream sourceStream)
+        {
+            string providedMD5 = this.blockBlob.Properties.ContentMD5;
+
+            var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
+
+            var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
+            blobRequestOptions.StoreBlobContentMD5 = false;
+
+            var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
+
+            if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentEncoding))
+            {
+                operationContext.UserHeaders.Add(
+                    Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader,
+                    this.blockBlob.Properties.ContentEncoding);
+
+                this.blockBlob.Properties.ContentEncoding = null;
+            }
+
+            if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentLanguage))
+            {
+                operationContext.UserHeaders.Add(
+                    Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader,
+                    this.blockBlob.Properties.ContentLanguage);
+
+                this.blockBlob.Properties.ContentLanguage = null;
+            }
+
+            await this.blockBlob.UploadFromStreamAsync(
+                sourceStream,
+                accessCondition,
+                blobRequestOptions,
+                operationContext,
+                this.CancellationToken);
+            
+            if (providedMD5 != operationContext.RequestResults.FirstOrDefault()?.ContentMd5 
+                || (this.SharedTransferData.Attributes.OverWriteAll && string.IsNullOrEmpty(this.blockBlob.Properties.ContentType))
+                || (!this.SharedTransferData.Attributes.OverWriteAll && this.blockBlob.Properties.ContentType == string.Empty))
+            {
+                this.blockBlob.Properties.ContentMD5 = providedMD5;
+
+                await this.blockBlob.SetPropertiesAsync(
+                    accessCondition,
+                    blobRequestOptions,
+                    Utils.GenerateOperationContext(this.Controller.TransferContext),
+                    this.CancellationToken);
             }
         }
 

@@ -32,8 +32,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
 
         protected override async Task DoFetchAttributesAsync()
         {
-            if (this.sourceLocation.IsInstanceInfoFetched == null
-                || !this.sourceLocation.IsInstanceInfoFetched.Value)
+            if (this.sourceLocation.IsInstanceInfoFetched != true)
             { 
                 AccessCondition accessCondition = Utils.GenerateIfMatchConditionWithCustomerCondition(
                     this.sourceLocation.ETag,
