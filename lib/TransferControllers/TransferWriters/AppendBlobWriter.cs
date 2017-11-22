@@ -17,7 +17,6 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
     using System.Threading.Tasks;
     using Microsoft.WindowsAzure.Storage.Blob;
     using Microsoft.WindowsAzure.Storage.Blob.Protocol;
-    using Microsoft.WindowsAzure.Storage.RetryPolicies;
 
     internal sealed class AppendBlobWriter : TransferReaderWriterBase
     {
@@ -461,48 +460,6 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             }
 
             return true;
-        }
-
-        private void DoCleanup()
-        {
-            if (this.appendBlob != null)
-            {
-                var requestOption = new BlobRequestOptions()
-                {
-                    RetryPolicy = new NoRetry(),
-                    ServerTimeout = Transfer_RequestOptions.DefaultCleanupServerTimeout
-                };
-
-                this.appendBlob.DeleteIfExistsAsync(
-                    DeleteSnapshotsOption.None,
-                    Utils.GenerateConditionWithCustomerCondition(this.destLocation?.AccessCondition),
-                    requestOption,
-                    Utils.GenerateOperationContext(this.Controller?.TransferContext),
-                    this.CancellationToken).GetAwaiter().GetResult();
-            }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-
-            try
-            {
-                if (disposing 
-                    && State.UploadBlob == this.state
-                    && this.SharedTransferData != null
-                    && this.SharedTransferData.TotalLength != 0
-                    && this.SharedTransferData.AvailableData.ContainsKey(this.expectedOffset)
-                    && this.expectedOffset == 0)
-                {
-                
-                    this.DoCleanup();
-                }
-            }
-            catch (Exception)
-            {
-                // Catch exception by design.
-            }
         }
 
         private void SetFinish()

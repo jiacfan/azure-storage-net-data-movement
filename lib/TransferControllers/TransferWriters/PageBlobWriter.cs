@@ -14,7 +14,6 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.WindowsAzure.Storage.Blob;
-    using Microsoft.WindowsAzure.Storage.RetryPolicies;
 
     internal sealed class PageBlobWriter : RangeBasedWriter
     {
@@ -143,25 +142,6 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                              blobRequestOptions,
                              operationContext,
                              this.CancellationToken);
-            }
-        }
-
-        protected override void DoCleanup()
-        {
-            if (this.pageBlob != null)
-            {
-                var requestOption = new BlobRequestOptions()
-                {
-                    RetryPolicy = new NoRetry(),
-                    ServerTimeout = Transfer_RequestOptions.DefaultCleanupServerTimeout
-                };
-
-                this.pageBlob.DeleteIfExistsAsync(
-                    DeleteSnapshotsOption.None,
-                    Utils.GenerateConditionWithCustomerCondition(this.destLocation?.AccessCondition),
-                    requestOption,
-                    Utils.GenerateOperationContext(this.Controller?.TransferContext),
-                    this.CancellationToken).GetAwaiter().GetResult();
             }
         }
     }

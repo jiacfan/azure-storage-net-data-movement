@@ -7,6 +7,7 @@
 namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
 {
     using System;
+    using System.Collections.Generic;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
@@ -270,6 +271,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
             var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
             var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
+            operationContext.UserHeaders = new Dictionary<string, string>();
 
             if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentEncoding))
             {
@@ -301,6 +303,22 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                 || (!this.SharedTransferData.Attributes.OverWriteAll && this.blockBlob.Properties.ContentType == string.Empty))
             {
                 this.blockBlob.Properties.ContentMD5 = providedMD5;
+
+                if (operationContext.UserHeaders != null)
+                {
+                    if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader))
+                    { 
+                        this.blockBlob.Properties.ContentEncoding =
+                            operationContext.UserHeaders[Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader];
+                    }
+
+                    if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader))
+                    {
+                        this.blockBlob.Properties.ContentLanguage =
+                            operationContext.UserHeaders[
+                                Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader];
+                    }
+                }
 
                 await this.blockBlob.SetPropertiesAsync(
                     accessCondition,
