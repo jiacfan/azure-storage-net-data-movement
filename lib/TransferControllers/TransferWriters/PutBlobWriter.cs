@@ -268,10 +268,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             string providedMD5 = this.blockBlob.Properties.ContentMD5;
 
             var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
-
             var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
-            blobRequestOptions.StoreBlobContentMD5 = false;
-
             var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
 
             if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentEncoding))
@@ -299,7 +296,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                 operationContext,
                 this.CancellationToken);
             
-            if (providedMD5 != operationContext.RequestResults.FirstOrDefault()?.ContentMd5 
+            if (providedMD5 != this.blockBlob.Properties.ContentMD5 
                 || (this.SharedTransferData.Attributes.OverWriteAll && string.IsNullOrEmpty(this.blockBlob.Properties.ContentType))
                 || (!this.SharedTransferData.Attributes.OverWriteAll && this.blockBlob.Properties.ContentType == string.Empty))
             {
