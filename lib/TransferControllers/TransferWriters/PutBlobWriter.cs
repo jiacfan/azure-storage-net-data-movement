@@ -41,7 +41,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                 "PutBlobWriter should be initialized after this.SharedTransferData.TotalLength is initialized.");
 
             Debug.Assert(
-                this.SharedTransferData.TotalLength <= Constants.SingleRequestBlobSizeThreshold, 
+                this.SharedTransferData.TotalLength <= Constants.SingleRequestBlobSizeThreshold,
                 $"The data to transfer is larger than {Constants.SingleRequestBlobSizeThreshold} (KB) while initializing a PutBlobWriter instance.");
 
             this.state = State.FetchAttributes;
@@ -63,7 +63,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
         }
 
         public override bool HasWork => this.hasWork &&
-                                        (!this.PreProcessed 
+                                        (!this.PreProcessed
                                          || (this.state == State.UploadBlob && this.SharedTransferData.AvailableData.Any() && null != this.SharedTransferData.Attributes));
 
         public override bool IsFinished => State.Error == this.state || State.Finished == this.state;
@@ -201,12 +201,24 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                     this.destLocation.Blob.Properties.BlobType == BlobType.BlockBlob,
                     "BlobType should be BlockBlob if we reach here.");
             }
-            
-            this.state = State.UploadBlob;
-            this.PreProcessed = true;
-            this.hasWork = true;
+
+            SingleObjectCheckpoint checkpoint = this.SharedTransferData.TransferJob.CheckPoint;
+
+            int leftBlockCount = (int)Math.Ceiling(
+                (this.SharedTransferData.TotalLength - checkpoint.EntryTransferOffset) / (double)this.SharedTransferData.BlockSize) + checkpoint.TransferWindow.Count;
+
+            if (0 == leftBlockCount)
+            {
+                this.SetFinish();
+            }
+            else
+            {
+                this.state = State.UploadBlob;
+                this.PreProcessed = true;
+                this.hasWork = true;
+            }
         }
-        
+
         private async Task UploadBlobAsync()
         {
             Debug.Assert(
@@ -229,7 +241,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                     {
                         transferData.Stream = new ChunkedMemoryStream(transferData.MemoryBuffer, 0, transferData.Length);
                     }
-                    
+
                     Utils.SetAttributes(this.blockBlob, this.SharedTransferData.Attributes);
 
                     await this.Controller.SetCustomAttributesAsync(this.blockBlob);
@@ -271,7 +283,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
             var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
             var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
-            operationContext.UserHeaders = new Dictionary<string, string>();
+            operationContext.UserHeaders = new Dictionary<string, string>(capacity: 2);
 
             if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentEncoding))
             {
@@ -297,27 +309,24 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                 blobRequestOptions,
                 operationContext,
                 this.CancellationToken);
-            
-            if (providedMD5 != this.blockBlob.Properties.ContentMD5 
+
+            if (providedMD5 != this.blockBlob.Properties.ContentMD5
                 || (this.SharedTransferData.Attributes.OverWriteAll && string.IsNullOrEmpty(this.blockBlob.Properties.ContentType))
                 || (!this.SharedTransferData.Attributes.OverWriteAll && this.blockBlob.Properties.ContentType == string.Empty))
             {
                 this.blockBlob.Properties.ContentMD5 = providedMD5;
 
-                if (operationContext.UserHeaders != null)
+                if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader))
                 {
-                    if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader))
-                    { 
-                        this.blockBlob.Properties.ContentEncoding =
-                            operationContext.UserHeaders[Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader];
-                    }
+                    this.blockBlob.Properties.ContentEncoding =
+                        operationContext.UserHeaders[Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader];
+                }
 
-                    if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader))
-                    {
-                        this.blockBlob.Properties.ContentLanguage =
-                            operationContext.UserHeaders[
-                                Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader];
-                    }
+                if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader))
+                {
+                    this.blockBlob.Properties.ContentLanguage =
+                        operationContext.UserHeaders[
+                            Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader];
                 }
 
                 await this.blockBlob.SetPropertiesAsync(
