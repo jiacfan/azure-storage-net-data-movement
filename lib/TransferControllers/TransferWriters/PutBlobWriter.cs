@@ -267,11 +267,14 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
 
         /// <summary>
         /// Upload using put blob and set customized blob properties.
-        /// Note this method: 
-        /// 1. Use x-ms-blob-content-encoding and x-ms-blob-content-language to work around request canonicalization.
-        /// 2. As REST API PutBlob would generate ContentMD5 and overwrite customized ContentMD5, 
-        ///    save provided content MD5 and use SetProperties to set customized ContentMD5 when necessary to ensure DMLib's behavior consistency.
-        /// 3. REST API PutBlob would set Content-Type to application/octet-stream by default, if provided ContentType is null or empty.
+        /// Note to ensure DMLib's behavior consistency, this method: 
+        /// 1. Uses x-ms-blob-content-encoding and x-ms-blob-content-language as a workaround to bypass request canonicalization
+        ///    forced by REST API PutBlob.
+        /// 2. As .Net core version's XSCL checks format of Cache-Control and Content-Type, uses x-ms-blob-cache-control and x-ms-blob-content-type
+        ///    as a workaround to bypass XSCL's header validation when necessary.
+        /// 3. As REST API PutBlob would generate ContentMD5 and overwrite customized ContentMD5, 
+        ///    uses SetProperties to set customized ContentMD5 when necessary.
+        /// 4. REST API PutBlob would set Content-Type to application/octet-stream by default, if provided Content-Type is null or empty.
         ///    To set Content-Type correctly, REST API SetBlobProperties must be called explicitly.
         /// </summary>
         /// <param name="sourceStream">Source stream.</param>
@@ -283,7 +286,16 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             var accessCondition = Utils.GenerateConditionWithCustomerCondition(this.destLocation.AccessCondition);
             var blobRequestOptions = Utils.GenerateBlobRequestOptions(this.destLocation.BlobRequestOptions);
             var operationContext = Utils.GenerateOperationContext(this.Controller.TransferContext);
-            operationContext.UserHeaders = new Dictionary<string, string>(capacity: 2);
+            operationContext.UserHeaders = new Dictionary<string, string>(capacity: 7); // Use 7 as capacity, a prime larger than 4, in case of collision, and runtime reallocation.
+
+            if (!string.IsNullOrEmpty(this.blockBlob.Properties.CacheControl))
+            {
+                operationContext.UserHeaders.Add(
+                    Shared.Protocol.Constants.HeaderConstants.BlobCacheControlHeader,
+                    this.blockBlob.Properties.CacheControl);
+
+                this.blockBlob.Properties.CacheControl = null;
+            }
 
             if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentEncoding))
             {
@@ -303,6 +315,15 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                 this.blockBlob.Properties.ContentLanguage = null;
             }
 
+            if (!string.IsNullOrEmpty(this.blockBlob.Properties.ContentType))
+            {
+                operationContext.UserHeaders.Add(
+                    Shared.Protocol.Constants.HeaderConstants.BlobContentTypeHeader,
+                    this.blockBlob.Properties.ContentType);
+
+                this.blockBlob.Properties.ContentType = null;
+            }
+
             await this.blockBlob.UploadFromStreamAsync(
                 sourceStream,
                 accessCondition,
@@ -316,6 +337,12 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
             {
                 this.blockBlob.Properties.ContentMD5 = providedMD5;
 
+                if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobCacheControlHeader))
+                {
+                    this.blockBlob.Properties.CacheControl =
+                        operationContext.UserHeaders[Shared.Protocol.Constants.HeaderConstants.BlobCacheControlHeader];
+                }
+
                 if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentEncodingHeader))
                 {
                     this.blockBlob.Properties.ContentEncoding =
@@ -327,6 +354,12 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                     this.blockBlob.Properties.ContentLanguage =
                         operationContext.UserHeaders[
                             Shared.Protocol.Constants.HeaderConstants.BlobContentLanguageHeader];
+                }
+
+                if (operationContext.UserHeaders.ContainsKey(Shared.Protocol.Constants.HeaderConstants.BlobContentTypeHeader))
+                {
+                    this.blockBlob.Properties.ContentType =
+                        operationContext.UserHeaders[Shared.Protocol.Constants.HeaderConstants.BlobContentTypeHeader];
                 }
 
                 await this.blockBlob.SetPropertiesAsync(

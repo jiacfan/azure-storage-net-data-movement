@@ -73,6 +73,8 @@
         private const string TestContentType = "newtype";
 #endif
         private const string invalidMD5 = "ThisIsAnInvalidMD5MD5A==";
+        
+        private static readonly string StraightALongString = new string('a', 1024);
 
         private static readonly string RandomLongString = FileOp.NextNormalString(random, 1024);
 
@@ -265,8 +267,15 @@
             int smallFileSizeInKB = 1; // 1 KB
             int bigFileNum = 5;
             int smallFileNum = 50;
-            Dictionary<string, string> metadata = new Dictionary<string, string> { { MetadataKey1, RandomLongString } };
 
+            string longString = StraightALongString;
+
+#if BINARY_SERIALIZATION
+            longString = RandomLongString;
+#endif // For .Net core, blob readers cannot fetch contentType and etc with special chars.
+
+            Dictionary<string, string> metadata = new Dictionary<string, string> { { MetadataKey1, longString } };
+            
             this.TestDirectorySetAttribute_Restart(
                 bigFileSizeInKB, 
                 smallFileSizeInKB, 
@@ -279,11 +288,11 @@
                             FileName, 
                             bigFileNum, 
                             bigFileSizeInKB, 
-                            cacheControl: RandomLongString, 
-                            contentDisposition: RandomLongString, 
-                            contentEncoding: RandomLongString, 
-                            contentLanguage: RandomLongString, 
-                            contentType: RandomLongString, 
+                            cacheControl: longString, 
+                            contentDisposition: longString, 
+                            contentEncoding: longString, 
+                            contentLanguage: longString, 
+                            contentType: longString, 
                             md5: invalidMD5, 
                             metadata: metadata);
                     }, 
@@ -294,11 +303,11 @@
                         FileName, 
                         smallFileNum, 
                         smallFileSizeInKB, 
-                        cacheControl: RandomLongString, 
-                        contentDisposition: RandomLongString, 
-                        contentEncoding: RandomLongString, 
-                        contentLanguage: RandomLongString, 
-                        contentType: RandomLongString, 
+                        cacheControl: longString, 
+                        contentDisposition: longString, 
+                        contentEncoding: longString, 
+                        contentLanguage: longString, 
+                        contentType: longString, 
                         md5: invalidMD5, 
                         metadata: metadata);
                     }

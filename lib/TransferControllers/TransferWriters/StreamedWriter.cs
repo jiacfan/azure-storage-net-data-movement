@@ -3,6 +3,7 @@
 //    Copyright (c) Microsoft Corporation
 // </copyright>
 //------------------------------------------------------------------------------
+
 namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
 {
     using System;
@@ -181,7 +182,7 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement.TransferControllers
                             longFilePath = LongPath.ToUncPath(longFilePath);
                         }
                         
-// Attempt to open the file first so that we throw an exception before getting into the async work
+                        // Attempt to open the file first so that we throw an exception before getting into the async work
                         this.outputStream = new FileStream(
                             longFilePath, 
                             fileMode, 

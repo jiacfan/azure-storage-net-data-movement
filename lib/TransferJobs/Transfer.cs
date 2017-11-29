@@ -122,6 +122,16 @@ namespace Microsoft.WindowsAzure.Storage.DataMovement
             {
                 this.progressTracker = this.ProgressTracker;
             }
+
+            if (this.Source != null)
+            { 
+                this.Source.IsInstanceInfoFetched = null;
+            }
+
+            if (this.Destination != null)
+            { 
+                this.Destination.IsInstanceInfoFetched = null;
+            }
         }
 
         [OnDeserialized]
